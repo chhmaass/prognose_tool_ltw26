@@ -67,7 +67,7 @@ html_template = """
 
   <div class="container">
     <form method="post" action="/prognose">
-      {% for party in ["CDU", "B90/Grüne", "AfD", "SPD", "Die Linke", "FDP", "BSW", "Sonstige"] %}
+      {% for party in ["CDU", "B90/Grüne", "AfD", "SPD", "Die Linke", "FDP", "BSW"] %}
         <label>{{party}} (%):</label><br>
         <input name="{{party}}" type="number" min="0" max="100" required><br><br>
       {% endfor %}
@@ -82,12 +82,16 @@ html_template = """
             <th>Partei</th>
             <th>Sitze</th>
           </tr>
-          {% for party, sitze in result.items() if party != "Hinweis" %}
+          {% for party in ["CDU", "B90/Grüne", "AfD", "SPD", "Die Linke", "FDP", "BSW"] %}
           <tr>
             <td>{{ party }}</td>
-            <td>{{ sitze }}</td>
+            <td>{{ result.get(party, 0) }}</td>
           </tr>
           {% endfor %}
+          <tr>
+            <td><strong>Gesamtzahl der Sitze</strong></td>
+            <td><strong>{{ result.get("Gesamtzahl der Sitze", "?") }}</strong></td>
+          </tr>
         </table>
         <p><strong>Hinweis:</strong> {{ result['Hinweis'] }}</p>
       </div>
@@ -96,7 +100,6 @@ html_template = """
 </body>
 </html>
 """
-
 
 # system_prompt
 system_prompt = """
@@ -246,49 +249,39 @@ Beispielausgabe:
 
 
 def berechne_verteilung(eingabe, direktmandate):
-    # Parteien, die über 5% liegen (ohne BSW, Sonstige)
-    parteien = [p for p in eingabe if eingabe[p]
-                >= 5 and p not in ["BSW", "Sonstige"]]
-    gesamt_prozent = sum(eingabe[p] for p in parteien)
-    anteile = {p: eingabe[p] / gesamt_prozent for p in parteien}
+    # Parteien mit mind. 5 % für Sitzverteilung (ohne Sonstige)
+    parteien_mit_sitzen = [
+        p for p in eingabe if eingabe[p] >= 5 and p != "Sonstige"]
+    gesamt_prozent = sum(eingabe[p] for p in parteien_mit_sitzen)
+    anteile = {p: eingabe[p] / gesamt_prozent for p in parteien_mit_sitzen}
 
-    # Schritt 1: Verteilung der 120 Grundsitze (ohne Direktmandate)
     grundsitze = 120
-    sitze_vor_rest = {p: math.floor(anteile[p] * grundsitze) for p in parteien}
+    sitze_vor_rest = {p: math.floor(
+        anteile[p] * grundsitze) for p in parteien_mit_sitzen}
     rest = grundsitze - sum(sitze_vor_rest.values())
     reste = {p: (anteile[p] * grundsitze) - sitze_vor_rest[p]
-             for p in parteien}
+             for p in parteien_mit_sitzen}
     for p in sorted(reste, key=reste.get, reverse=True)[:rest]:
         sitze_vor_rest[p] += 1
 
-    # Schritt 2: Berechne Überhangmandate je Partei
     ueberhang = {p: max(0, direktmandate.get(
-        p, 0) - sitze_vor_rest.get(p, 0)) for p in parteien}
+        p, 0) - sitze_vor_rest.get(p, 0)) for p in parteien_mit_sitzen}
     ges_ueberhang = sum(ueberhang.values())
-
-    # Schritt 3: Berechne erforderliche neue Sitzanzahl (mind. 120)
     min_sitze = max(grundsitze, sum(sitze_vor_rest.values()) + ges_ueberhang)
 
-    # Schritt 4: Verteile Sitze proportional auf neue Sitzanzahl
-    sitze = {p: round(anteile[p] * min_sitze) for p in parteien}
-
-    # Schritt 5: Korrigiere Ausgleichsmandate, falls nötig
-    while any(sitze[p] < direktmandate.get(p, 0) for p in parteien):
+    sitze = {p: round(anteile[p] * min_sitze) for p in parteien_mit_sitzen}
+    while any(sitze[p] < direktmandate.get(p, 0) for p in parteien_mit_sitzen):
         min_sitze += 1
-        sitze = {p: round(anteile[p] * min_sitze) for p in parteien}
+        sitze = {p: round(anteile[p] * min_sitze) for p in parteien_mit_sitzen}
 
-    # Schritt 6: Abschließende Werte einfügen
-    # sitze.update({"BSW": 0, "Sonstige": 0})
-    # sitze["Gesamtzahl der Sitze"] = sum(sitze.values())
-    # return sitze
+    # Alle Parteien außer Sonstige anzeigen – mit 0 Sitzen wenn nötig
+    for p in eingabe:
+        if p != "Sonstige" and p not in sitze:
+            sitze[p] = 0
 
-    # Schritt 6: Abschließende Werte einfügen – alle Parteien absichern
-    alle_parteien = ["CDU", "B90/Grüne", "AfD",
-                     "SPD", "Die Linke", "FDP", "BSW", "Sonstige"]
-    for p in alle_parteien:
-        sitze.setdefault(p, 0)
-
-    sitze["Gesamtzahl der Sitze"] = sum(sitze[p] for p in alle_parteien)
+    sitze["Sonstige"] = 0
+    sitze["Gesamtzahl der Sitze"] = sum(sitze.values())
+    return sitze
 
 
 @app.route("/", methods=["GET"])
@@ -338,9 +331,6 @@ def prognose():
         abw_max = max(abs(v) for v in abweichung.values())
 
         result_data["Hinweis"] = "Diese Verteilung ist eine Schätzung."
-        if abw_max > 2:
-            result_data[
-                "Hinweis"] += f" ⚠️ Abweichung zur Zweitstimmenverteilung erkennbar: {abweichung}"
 
     except Exception as e:
         result_data = {"Hinweis": f"Fehler bei API-Anfrage: {e}"}
@@ -348,8 +338,8 @@ def prognose():
     return render_template_string(html_template, result=result_data)
 
 
-# if __name__ == "__main__":
-    # app.run(debug=True, port=5000)
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    app.run(debug=True, port=5000)
+
+# if __name__ == "__main__":
+    # app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
