@@ -278,9 +278,17 @@ def berechne_verteilung(eingabe, direktmandate):
         sitze = {p: round(anteile[p] * min_sitze) for p in parteien}
 
     # Schritt 6: Abschließende Werte einfügen
-    sitze.update({"BSW": 0, "Sonstige": 0})
-    sitze["Gesamtzahl der Sitze"] = sum(sitze.values())
-    return sitze
+    # sitze.update({"BSW": 0, "Sonstige": 0})
+    # sitze["Gesamtzahl der Sitze"] = sum(sitze.values())
+    # return sitze
+
+    # Schritt 6: Abschließende Werte einfügen – alle Parteien absichern
+    alle_parteien = ["CDU", "B90/Grüne", "AfD",
+                     "SPD", "Die Linke", "FDP", "BSW", "Sonstige"]
+    for p in alle_parteien:
+    sitze.setdefault(p, 0)
+
+    sitze["Gesamtzahl der Sitze"] = sum(sitze[p] for p in alle_parteien)
 
 
 @app.route("/", methods=["GET"])
@@ -316,10 +324,11 @@ def prognose():
 
         # robustere Extraktion mit get() für alle Parteien
         direktmandate = {p: gpt_result.get(p, 0) for p in [
-            "CDU", "B90/Grüne", "AfD", "SPD", "Die Linke", "FDP"]}
+            "CDU", "B90/Grüne", "AfD", "SPD", "Die Linke", "FDP", "BSW", "Sonstige"]}
         result_data = berechne_verteilung(eingabe, direktmandate)
 
-        parteien = ["CDU", "B90/Grüne", "AfD", "SPD", "Die Linke", "FDP"]
+        parteien = ["CDU", "B90/Grüne", "AfD", "SPD",
+                    "Die Linke", "FDP", "BSW", "Sonstige"]
         anteile = {p: eingabe[p] / sum(eingabe[p2] for p2 in parteien if eingabe[p2] > 0)
                    for p in parteien if eingabe[p] > 0}
         gesamt = result_data["Gesamtzahl der Sitze"]
