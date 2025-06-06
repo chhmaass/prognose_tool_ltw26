@@ -286,6 +286,8 @@ def berechne_verteilung(eingabe, direktmandate):
     alle_parteien = ["CDU", "B90/Grüne", "AfD",
                      "SPD", "Die Linke", "FDP", "BSW", "Sonstige"]
     for p in alle_parteien:
+        sitze.setdefault(p, 0)
+
     sitze.setdefault(p, 0)
 
     sitze["Gesamtzahl der Sitze"] = sum(sitze[p] for p in alle_parteien)
