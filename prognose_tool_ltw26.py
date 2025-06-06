@@ -29,7 +29,7 @@ html_template = """
       min-height: 100vh;
       font-family: Arial, sans-serif;
       text-align: center;
-      padding-top: 30px;
+      padding-top: 0;
     }
     .container {
       display: flex;
@@ -67,7 +67,7 @@ html_template = """
 
   <div class="container">
     <form method="post" action="/prognose">
-      {% for party in ["CDU", "B90/Grüne", "AfD", "SPD", "Die Linke", "FDP", "BSW"] %}
+      {% for party in ["CDU", "B90/Grüne", "AfD", "SPD", "Linke", "FDP", "BSW", "Sonstige"] %}
         <label>{{party}} (%):</label><br>
         <input name="{{party}}" type="number" min="0" max="100" required><br><br>
       {% endfor %}
@@ -80,19 +80,23 @@ html_template = """
         <table>
           <tr>
             <th>Partei</th>
+            <th>Zweitstimmen (%)</th>
             <th>Sitze</th>
           </tr>
-          {% for party in ["CDU", "B90/Grüne", "AfD", "SPD", "Die Linke", "FDP", "BSW"] %}
+          {% for party in ["CDU", "B90/Grüne", "AfD", "SPD", "Linke", "FDP", "BSW"] %}
           <tr>
             <td>{{ party }}</td>
+            <td>{{ eingabe[party] if eingabe and party in eingabe else "-" }}</td>
             <td>{{ result.get(party, 0) }}</td>
           </tr>
           {% endfor %}
           <tr>
-            <td><strong>Gesamtzahl der Sitze</strong></td>
+            <td><strong>Gesamt</strong></td>
+            <td>100</td>
             <td><strong>{{ result.get("Gesamtzahl der Sitze", "?") }}</strong></td>
           </tr>
         </table>
+
         <p><strong>Hinweis:</strong> {{ result['Hinweis'] }}</p>
       </div>
     {% endif %}
@@ -112,7 +116,7 @@ Datenbasis:
 Nutze typische regionale Muster der Bundestagswahl 2025. 
 Die folgende Tabelle enthält die Bundestagswahlzweitstimmenverteilung in den 37 Bundestagswahlkreisen in BW (in Dezimalwerten):
 
-Wahlkreis,CDU,B90/Grüne,AfD,SPD,Die Linke,FDP,BSW,Sonstige
+Wahlkreis,CDU,B90/Grüne,AfD,SPD,Linke,FDP,BSW,Sonstige
 Baden-Württemberg,0.32,0.14,0.2,0.14,0.07,0.06,0.04,0.04
 Stuttgart I,0.26,0.25,0.09,0.15,0.11,0.07,0.03,0.03
 Stuttgart II,0.27,0.17,0.14,0.16,0.11,0.06,0.05,0.04
@@ -154,7 +158,7 @@ Ravensburg,0.35,0.13,0.19,0.12,0.06,0.05,0.04,0.05
 Zollernalb - Sigmaringen,0.37,0.08,0.26,0.11,0.05,0.05,0.04,0.04
 
 Hier als Hilfestellung das Ergebnis der Landtagswahl nach (70) Wahlkreisen:
-Wahlkreis,"Wahljahr","Wahlbeteiligung". "GRÜNE","CDU","AfD","SPD","FDP","DIE LINKE","Sonstige"
+Wahlkreis,"Wahljahr","Wahlbeteiligung". "GRÜNE","CDU","AfD","SPD","FDP","Linke","Sonstige"
 01 Stuttgart I,2021,69.4,44.8,17.9,3.3,9.4,10.1,7.5,7.0
 02 Stuttgart II,2021,69.9,39.8,21.7,4.9,10.0,12.9,4.4,6.3
 03 Stuttgart III,2021,59.9,33.9,24.3,8.0,12.2,10.6,4.8,6.2
@@ -226,7 +230,6 @@ Wahlkreis,"Wahljahr","Wahlbeteiligung". "GRÜNE","CDU","AfD","SPD","FDP","DIE LI
 69 Ravensburg,2021,65.3,33.1,23.7,8.7,8.2,11.5,3.4,11.4
 70 Sigmaringen,2021,63.3,32.6,27.8,11.2,6.2,12.1,2.4,7.6
 
-
 Hinweise:
 - Es gibt genau 70 Direktmandate.
 - Parteien, die flächig starke Regionen haben, gewinnen dort eher Direktmandate.
@@ -238,7 +241,7 @@ Beispielausgabe:
   "B90/Grüne": 8,
   "AfD": 2,
   "SPD": 0,
-  "Die Linke": 0,
+  "Linke": 0,
   "FDP": 0,
   "BSW": 0,
   "Sonstige": 0
@@ -249,7 +252,6 @@ Beispielausgabe:
 
 
 def berechne_verteilung(eingabe, direktmandate):
-    # Parteien mit mind. 5 % für Sitzverteilung (ohne Sonstige)
     parteien_mit_sitzen = [
         p for p in eingabe if eingabe[p] >= 5 and p != "Sonstige"]
     gesamt_prozent = sum(eingabe[p] for p in parteien_mit_sitzen)
@@ -274,7 +276,6 @@ def berechne_verteilung(eingabe, direktmandate):
         min_sitze += 1
         sitze = {p: round(anteile[p] * min_sitze) for p in parteien_mit_sitzen}
 
-    # Alle Parteien außer Sonstige anzeigen – mit 0 Sitzen wenn nötig
     for p in eingabe:
         if p != "Sonstige" and p not in sitze:
             sitze[p] = 0
@@ -293,7 +294,7 @@ def index():
 def prognose():
     eingabe = {party: int(request.form[party]) for party in request.form}
     if sum(eingabe.values()) != 100:
-        return render_template_string(html_template, result={"Hinweis": "Fehler: Die Summe der Werte muss genau 100 ergeben."})
+        return render_template_string(html_template, result={"Hinweis": "Fehler: Die Summe der Werte muss genau 100 ergeben."}, eingabe=eingabe)
 
     nutzer_prompt = f"Eingabeformat für die Prognose zur Landtagswahl Baden-Württemberg 2026 (Zweitstimmenanteile in Prozent):\n{eingabe}"
 
@@ -315,31 +316,17 @@ def prognose():
         cleaned = json_block.group(0).replace("'", '"')
         gpt_result = json.loads(cleaned)
 
-        # robustere Extraktion mit get() für alle Parteien
         direktmandate = {p: gpt_result.get(p, 0) for p in [
-            "CDU", "B90/Grüne", "AfD", "SPD", "Die Linke", "FDP", "BSW", "Sonstige"]}
+            "CDU", "B90/Grüne", "AfD", "SPD", "Linke", "FDP", "BSW", "Sonstige"]}
         result_data = berechne_verteilung(eingabe, direktmandate)
-
-        parteien = ["CDU", "B90/Grüne", "AfD", "SPD",
-                    "Die Linke", "FDP", "BSW", "Sonstige"]
-        anteile = {p: eingabe[p] / sum(eingabe[p2] for p2 in parteien if eingabe[p2] > 0)
-                   for p in parteien if eingabe[p] > 0}
-        gesamt = result_data["Gesamtzahl der Sitze"]
-        rel = {p: result_data.get(p, 0) / gesamt for p in anteile}
-        abweichung = {p: round((rel[p] - anteile[p]) * 100, 2)
-                      for p in anteile}
-        abw_max = max(abs(v) for v in abweichung.values())
 
         result_data["Hinweis"] = "Diese Verteilung ist eine Schätzung."
 
     except Exception as e:
         result_data = {"Hinweis": f"Fehler bei API-Anfrage: {e}"}
 
-    return render_template_string(html_template, result=result_data)
+    return render_template_string(html_template, result=result_data, eingabe=eingabe)
 
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
-
-# if __name__ == "__main__":
-    # app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
