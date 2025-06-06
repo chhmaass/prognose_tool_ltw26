@@ -10,7 +10,7 @@ import re
 load_dotenv()
 
 # OpenAI-Client initialisieren
-client = OpenAI()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = Flask(__name__)
 
