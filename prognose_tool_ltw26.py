@@ -288,8 +288,6 @@ def berechne_verteilung(eingabe, direktmandate):
     for p in alle_parteien:
         sitze.setdefault(p, 0)
 
-    sitze.setdefault(p, 0)
-
     sitze["Gesamtzahl der Sitze"] = sum(sitze[p] for p in alle_parteien)
 
 
