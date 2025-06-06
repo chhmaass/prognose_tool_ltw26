@@ -339,5 +339,8 @@ def prognose():
     return render_template_string(html_template, result=result_data)
 
 
+# if __name__ == "__main__":
+    # app.run(debug=True, port=5000)
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
