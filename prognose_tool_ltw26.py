@@ -285,7 +285,7 @@ def berechne_verteilung(eingabe, direktmandate):
     return sitze
 
 
-@app.route("/", methods=["GET"])
+@app.route("/", methods=["GET", "HEAD"])
 def index():
     return render_template_string(html_template)
 
