@@ -252,36 +252,53 @@ Beispielausgabe:
 
 
 def berechne_verteilung(eingabe, direktmandate):
+    # Nur Parteien ≥ 5 % (außer Sonstige)
     parteien_mit_sitzen = [
         p for p in eingabe if eingabe[p] >= 5 and p != "Sonstige"]
+
+    # Prozentuale Anteile der berücksichtigten Parteien (normiert)
     gesamt_prozent = sum(eingabe[p] for p in parteien_mit_sitzen)
     anteile = {p: eingabe[p] / gesamt_prozent for p in parteien_mit_sitzen}
 
     grundsitze = 120
-    sitze_vor_rest = {p: math.floor(
-        anteile[p] * grundsitze) for p in parteien_mit_sitzen}
-    rest = grundsitze - sum(sitze_vor_rest.values())
-    reste = {p: (anteile[p] * grundsitze) - sitze_vor_rest[p]
-             for p in parteien_mit_sitzen}
-    for p in sorted(reste, key=reste.get, reverse=True)[:rest]:
-        sitze_vor_rest[p] += 1
 
-    ueberhang = {p: max(0, direktmandate.get(
-        p, 0) - sitze_vor_rest.get(p, 0)) for p in parteien_mit_sitzen}
+    def hare_niemeyer_verteilung(anteile, sitzzahl):
+        roh = {p: anteile[p] * sitzzahl for p in anteile}
+        ganz = {p: math.floor(roh[p]) for p in anteile}
+        rest = sitzzahl - sum(ganz.values())
+        nachkommareste = {p: roh[p] - ganz[p] for p in anteile}
+        for p in sorted(nachkommareste, key=nachkommareste.get, reverse=True)[:rest]:
+            ganz[p] += 1
+        return ganz
+
+    # Erste Verteilung mit 120 Sitzen
+    sitze_vor_rest = hare_niemeyer_verteilung(anteile, grundsitze)
+
+    # Überhangmandate berechnen
+    ueberhang = {
+        p: max(0, direktmandate.get(p, 0) - sitze_vor_rest.get(p, 0))
+        for p in parteien_mit_sitzen
+    }
     ges_ueberhang = sum(ueberhang.values())
+
+    # Neue Mindestgröße für den Landtag
     min_sitze = max(grundsitze, sum(sitze_vor_rest.values()) + ges_ueberhang)
 
-    sitze = {p: round(anteile[p] * min_sitze) for p in parteien_mit_sitzen}
-    while any(sitze[p] < direktmandate.get(p, 0) for p in parteien_mit_sitzen):
+    # Wiederverteilung mit Anpassung bis Direktmandate abgedeckt sind
+    while True:
+        sitze = hare_niemeyer_verteilung(anteile, min_sitze)
+        if all(sitze[p] >= direktmandate.get(p, 0) for p in parteien_mit_sitzen):
+            break
         min_sitze += 1
-        sitze = {p: round(anteile[p] * min_sitze) for p in parteien_mit_sitzen}
 
+    # Restliche Parteien (auch < 5 %) auf 0 setzen
     for p in eingabe:
         if p != "Sonstige" and p not in sitze:
             sitze[p] = 0
 
     sitze["Sonstige"] = 0
     sitze["Gesamtzahl der Sitze"] = sum(sitze.values())
+
     return sitze
 
 
