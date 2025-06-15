@@ -262,17 +262,26 @@ def berechne_verteilung(eingabe, direktmandate):
 
     grundsitze = 120
 
-    def hare_niemeyer_verteilung(anteile, sitzzahl):
-        roh = {p: anteile[p] * sitzzahl for p in anteile}
-        ganz = {p: math.floor(roh[p]) for p in anteile}
-        rest = sitzzahl - sum(ganz.values())
-        nachkommareste = {p: roh[p] - ganz[p] for p in anteile}
-        for p in sorted(nachkommareste, key=nachkommareste.get, reverse=True)[:rest]:
-            ganz[p] += 1
-        return ganz
+    def saint_lague_verteilung(stimmen, sitzzahl):
+        teilerserie = [2 * i + 1 for i in range(sitzzahl * len(stimmen))]
+        quoten = []
+
+        for partei, stimmanteil in stimmen.items():
+            absolute_stimmen = stimmanteil * 1_000_000
+            for teiler in teilerserie[:sitzzahl]:
+                quoten.append((partei, absolute_stimmen / teiler))
+
+        quoten.sort(key=lambda x: x[1], reverse=True)
+
+        sitze = {p: 0 for p in stimmen}
+        for i in range(sitzzahl):
+            partei = quoten[i][0]
+            sitze[partei] += 1
+
+        return sitze
 
     # Erste Verteilung mit 120 Sitzen
-    sitze_vor_rest = hare_niemeyer_verteilung(anteile, grundsitze)
+    sitze_vor_rest = saint_lague_verteilung(anteile, grundsitze)
 
     # Überhangmandate berechnen
     ueberhang = {
@@ -286,7 +295,7 @@ def berechne_verteilung(eingabe, direktmandate):
 
     # Wiederverteilung mit Anpassung bis Direktmandate abgedeckt sind
     while True:
-        sitze = hare_niemeyer_verteilung(anteile, min_sitze)
+        sitze = saint_lague_verteilung(anteile, min_sitze)
         if all(sitze[p] >= direktmandate.get(p, 0) for p in parteien_mit_sitzen):
             break
         min_sitze += 1
